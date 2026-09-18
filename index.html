@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>English</title>
+</head>
+<body>
+<h2 id="heading">English</h2>
+
+<ul id="wordList"></ul>
+
+<button id="randomBtn">Random</button>
+
+<script>
+var allWords = [];
+var perPage = 10;
+
+fetch('words.json')
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    var seen = {};
+    allWords = [];
+    var keys = Object.keys(data);
+    for (var i = 0; i < keys.length; i++) {
+      var word = keys[i];
+      var lower = word.toLowerCase();
+      if (seen[lower]) continue;
+      seen[lower] = true;
+      allWords.push({ word: word, meaning: data[word] });
+    }
+    document.getElementById('heading').textContent = 'English [' + allWords.length + ']';
+    showRandomWords();
+  })
+  .catch(function(err) {
+    document.getElementById('wordList').innerHTML = '<li>Could not load words.json. Make sure this page is opened through a local server, not double-clicked directly.</li>';
+    console.error(err);
+  });
+
+function showRandomWords() {
+  var shuffled = allWords.slice().sort(function() { return Math.random() - 0.5; });
+  var picked = shuffled.slice(0, perPage);
+
+  var html = '';
+  for (var i = 0; i < picked.length; i++) {
+    html += '<li><b>' + picked[i].word + '</b> = ' + picked[i].meaning + '</li>';
+  }
+  document.getElementById('wordList').innerHTML = html;
+}
+
+document.getElementById('randomBtn').addEventListener('click', showRandomWords);
+</script>
+
+</body>
+</html>
