@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Words</title>
+<style>
+  :root {
+    --paper: #f3f6f8;
+    --ink: #17222b;
+    --muted: #5d6b76;
+    --line: #cfd9e0;
+    --accent: #1b5e7a;
+    --accent-ink: #ffffff;
+    --ok: #1f6b3a;
+    --warn: #8a4b00;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 18px/1.6 Georgia, "Times New Roman", serif;
+  }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 0 20px 64px; }
+  nav {
+    display: flex; gap: 28px;
+    border-bottom: 1px solid var(--line);
+    padding: 22px 0 0; margin-bottom: 32px;
+  }
+  nav button {
+    font: inherit; font-size: 20px;
+    background: none; border: 0; border-bottom: 3px solid transparent;
+    padding: 0 2px 10px; cursor: pointer; color: var(--muted);
+  }
+  nav button[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  h1 { font-size: 40px; line-height: 1.1; margin: 0 0 4px; font-weight: 700; }
+  .total { color: var(--muted); margin: 0 0 28px; }
+  ul.words { list-style: none; margin: 0; padding: 0; }
+  ul.words li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  ul.words b { font-weight: 700; }
+  ul.words .eq { color: var(--muted); margin: 0 6px; }
+  .empty { color: var(--muted); padding: 12px 0; }
+  .btn {
+    font: inherit; font-size: 17px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+    border: 0; border-radius: 4px; padding: 10px 20px;
+  }
+  .btn.quiet { background: none; color: var(--accent); border: 1px solid var(--accent); }
+  .row { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+  label { display: block; margin: 20px 0 6px; }
+  input, textarea {
+    width: 100%; font: inherit; color: var(--ink);
+    background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+  .msg { min-height: 1.6em; margin: 14px 0 0; }
+  .msg.ok { color: var(--ok); }
+  .msg.warn { color: var(--warn); }
+  .filebox { margin-top: 44px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 16px; }
+  .filebox p { margin: 0 0 12px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav aria-label="Pages">
+    <button id="nav-show" aria-current="page">Show</button>
+    <button id="nav-add">Add</button>
+  </nav>
+
+  <main id="page-show">
+    <h1>My words</h1>
+    <p class="total" id="total"></p>
+    <ul class="words" id="list"></ul>
+    <div class="row">
+      <button class="btn" id="random">Random 10</button>
+    </div>
+  </main>
+
+  <main id="page-add" hidden="">
+    <h1>Add a word</h1>
+    <label for="word">Word</label>
+    <input id="word" type="text" autocomplete="off">
+    <label for="def">Definition</label>
+    <textarea id="def"></textarea>
+    <div class="row"><button class="btn" id="add">Add word</button></div>
+    <p class="msg" id="msg" role="status"></p>
+
+    <div class="filebox">
+      <p id="savestate"></p>
+      <button class="btn quiet" id="connect" hidden="">Connect this file for automatic saving</button>
+      <button class="btn quiet" id="download">Download updated HTML</button>
+    </div>
+  </main>
+</div>
+
+<!-- Your words live here, inside this file. -->
+<script id="words-data" type="application/json">
+[
+  {
+    "w": "Assumption",
+    "d": "something that you accept as true, real, or certain without having direct proof or evidence"
+  },
+  {
+    "w": "Detain",
+    "d": "To detain means to officially keep someone in a place and prevent them from leaving, or to delay someone for a short period"
+  },
+  {
+    "w": "Succinctly",
+    "d": "Succinctly means expressing something clearly and in a brief manner without using unnecessary words"
+  },
+  {
+    "w": "Postulation",
+    "d": "Postulation is the act of suggesting, claiming, or assuming something as a basic principle, hypothesis, or starting point for an argument or theory"
+  },
+  {
+    "w": "Naive",
+    "d": "බොළඳ"
+  },
+  {
+    "w": "Discursive",
+    "d": "Rambling from topic to topic, reasoning step-by-step rather than using intuition, or relating to language and discourse"
+  },
+  {
+    "w": "Contingent",
+    "d": "Contingent means dependent on something else happening, or a group of people representing a larger organization"
+  }
+]
+</script>
+
+<script>
+(function () {
+  // Snapshot of this file before the page draws anything, used when saving.
+  var SOURCE = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+  var KEY = "my-words-v1";
+  var PAGE_SIZE = 10;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var words = [];
+  var fileHandle = null;
+
+  function keyOf(x) { return (x.w + "\u0000" + x.d).toLowerCase(); }
+
+  function load() {
+    var embedded = [], stored = [];
+    try { embedded = JSON.parse($("words-data").textContent); } catch (e) {}
+    try { stored = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
+    var seen = {};
+    words = [];
+    embedded.concat(stored).forEach(function (x) {
+      if (!x || !x.w || !x.d) return;
+      var k = keyOf(x);
+      if (!seen[k]) { seen[k] = 1; words.push({ w: x.w, d: x.d }); }
+    });
+  }
+
+  function buildHTML() {
+    var json = JSON.stringify(words, null, 2).replace(/</g, "\\u003c");
+    return SOURCE.replace(
+      /(<script id="words-data" type="application\/json">)[\s\S]*?(<\/script>)/,
+      function (m, a, b) { return a + "\n" + json + "\n" + b; }
+    );
+  }
+
+  function setState(text) { $("savestate").textContent = text; }
+
+  async function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(words)); } catch (e) {}
+    if (fileHandle) {
+      try {
+        var stream = await fileHandle.createWritable();
+        await stream.write(buildHTML());
+        await stream.close();
+        setState("Saved into your HTML file.");
+        return;
+      } catch (e) {
+        setState("Could not write to the file. Use “Download updated HTML” instead.");
+        return;
+      }
+    }
+    refreshState();
+  }
+
+  function refreshState() {
+    if (fileHandle) return;
+    setState(window.showSaveFilePicker
+      ? "Words are kept in this browser. Connect the file to save into it automatically."
+      : "Words are kept in this browser. Use “Download updated HTML” to save them into the file.");
+  }
+
+  function pick(n) {
+    var a = words.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a.slice(0, n);
+  }
+
+  function render() {
+    var list = $("list");
+    list.innerHTML = "";
+    $("total").textContent = words.length === 1
+      ? "1 word in your vocabulary"
+      : words.length + " words in your vocabulary";
+    if (!words.length) {
+      var p = document.createElement("li");
+      p.className = "empty";
+      p.textContent = "No words yet. Open Add to save your first one.";
+      list.appendChild(p);
+      return;
+    }
+    pick(PAGE_SIZE).forEach(function (x) {
+      var li = document.createElement("li");
+      var b = document.createElement("b");
+      b.textContent = x.w;
+      var eq = document.createElement("span");
+      eq.className = "eq";
+      eq.textContent = "=";
+      li.appendChild(b);
+      li.appendChild(eq);
+      li.appendChild(document.createTextNode(x.d));
+      list.appendChild(li);
+    });
+  }
+
+  function go(page) {
+    var show = page === "show";
+    $("page-show").hidden = !show;
+    $("page-add").hidden = show;
+    $("nav-show").setAttribute("aria-current", show ? "page" : "false");
+    $("nav-add").setAttribute("aria-current", show ? "false" : "page");
+    if (show) render(); else $("word").focus();
+  }
+
+  function msg(text, cls) { var m = $("msg"); m.textContent = text; m.className = "msg " + (cls || ""); }
+
+  async function addWord() {
+    var w = $("word").value.trim();
+    var d = $("def").value.trim();
+    if (!w || !d) { msg("Enter both a word and its definition.", "warn"); return; }
+    var entry = { w: w, d: d };
+    if (words.some(function (x) { return x.w.toLowerCase() === w.toLowerCase() && x.d.toLowerCase() === d.toLowerCase(); })) {
+      msg("That word with that definition is already saved.", "warn"); return;
+    }
+    words.push(entry);
+    await persist();
+    $("word").value = "";
+    $("def").value = "";
+    msg("Added “" + w + "”. You now have " + words.length + " words.", "ok");
+    $("word").focus();
+  }
+
+  function download() {
+    var blob = new Blob([buildHTML()], { type: "text/html" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "my-words.html";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  async function connect() {
+    try {
+      var handles = await window.showOpenFilePicker({
+        types: [{ description: "HTML file", accept: { "text/html": [".html", ".htm"] } }]
+      });
+      fileHandle = handles[0];
+      await persist();
+    } catch (e) { /* cancelled */ }
+  }
+
+  $("nav-show").onclick = function () { go("show"); };
+  $("nav-add").onclick = function () { go("add"); };
+  $("random").onclick = render;
+  $("add").onclick = addWord;
+  $("download").onclick = download;
+  $("connect").onclick = connect;
+  $("def").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) addWord();
+  });
+  $("word").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); $("def").focus(); }
+  });
+
+  if (window.showOpenFilePicker) $("connect").hidden = false;
+  load();
+  refreshState();
+  render();
+})();
+</script></body></html>
